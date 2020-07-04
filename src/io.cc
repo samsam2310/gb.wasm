@@ -7,6 +7,7 @@
 IO::IO(Memory* mem): mem_(mem) {
   memset(reg_, 0, sizeof(reg_));
   enableInterrupt();
+  reg_[P1] = 0xF;
   reg_[LCDC] = 0x91;
   reg_[BGP] = 0xFC;
   reg_[OBP0] = 0xFF;
@@ -16,15 +17,15 @@ IO::IO(Memory* mem): mem_(mem) {
 IO::~IO() {}
 
 void IO::disableInterrupt() {
-  ERR << "IO DL" << endl;
+  // ERR << "IO DL" << endl;
   reg_[IME] = 0;
 }
 void IO::enableInterrupt() {
-  ERR << "IO EL" << endl;
+  // ERR << "IO EL" << endl;
   reg_[IME] = 0xFF;
 }
 void IO::requestInterrupt(INTERRUPT inter) {
-  ERR << "IO R inter: " << inter << endl;
+  // ERR << "IO R inter: " << inter << endl;
   reg_[IF] |= (1 << inter);
 }
 
@@ -83,18 +84,19 @@ uint8_t IO::read(uint16_t addr) {
 
 uint8_t IO::write(uint16_t addr, uint8_t datum) {
   uint8_t reg = addr & 0xFF;
-  // ERR << "IO Write " << reg << " " << datum << endl;
+  ERR << "IO Write " << reg << " " << datum << endl;
   switch (reg) {
     case DMA:
       return doDMA_(datum);
     case STAT:
       ERR << "STAT write " << datum << endl;
-      return reg_[reg] = (reg_[reg] & 0x3) | (datum & 0xFC);
+      return reg_[reg] = (reg_[reg] & 0x7) | (datum & 0xF8);
     case LCDC:
-      ERR << "LCDC write " << datum << " STAT " << reg_[STAT] << endl;
+      ERR.pc() << "LCDC write " << datum << " STAT " << reg_[STAT] << endl;
       return reg_[reg] = datum;
-
     case P1:
+      return reg_[reg] = (reg_[reg] & 0xF) | (datum & 0xF0);
+
     case SB:
     case SC:
     case DIV:
@@ -147,7 +149,7 @@ uint16_t IO::acknowledgeInterrupt() {
   uint8_t r = reg_[IME] & reg_[IF] & reg_[IE];
   for (int i = 0; i < 5; ++i) {
     if ((1 << i) & r) {
-      reg_[IF] &= (~(1 << i));
+      reg_[IF] &= (uint8_t)(~(1u << i));
       return 0x40 + 8 * i;
     }
   }

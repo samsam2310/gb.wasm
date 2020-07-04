@@ -4,7 +4,7 @@
 #include "memory.h"
 
 class CPU {
- private:
+ public:
   struct Register {
     union {
       struct {

@@ -1,4 +1,6 @@
 #pragma once
+#include "cpu.h"
+
 #include <stdint.h>
 
 #include <string>
@@ -11,8 +13,17 @@ const struct JSStreamEndl {} endl;
 
 struct JSStream {
   std::string s;
+  CPU* cpu_;
 
   JSStream(): s() {}
+
+  void set(CPU* cpu) {
+    cpu_ = cpu;
+  }
+
+  JSStream& pc() {
+    return (*this << "PC(" << cpu_->reg_.pc << ") ");
+  }
 
   JSStream& operator<<(const std::string& x) {
     s += x;

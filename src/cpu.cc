@@ -831,6 +831,7 @@ int CPU::executeSingleInstInner_() {
       reg_.pc = mem_->read16(reg_.sp);
       reg_.sp += 2;
       mem_->io().enableInterrupt();
+      ERR << "RETI" << endl;
       return 8;
 
     default:

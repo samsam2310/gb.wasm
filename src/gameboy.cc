@@ -2,6 +2,7 @@
 
 #include "cartridge.h"
 #include "memory.h"
+#include "log.h"
 
 #include <emscripten.h>
 
@@ -10,7 +11,9 @@ const int FPS = 64;
 const int CYCLE_PER_FRAME = CYCLE_PER_SECOND / FPS;
 
 Gameboy::Gameboy(uint8_t* romData, int canvasId)
-    : io_(&mem_), mem_(Cartridge(romData), &io_), video_(&io_, canvasId), cpu_(&mem_), isRunning_(false), timing_(0) {}
+    : io_(&mem_), mem_(Cartridge(romData), &io_), video_(&io_, canvasId), cpu_(&mem_), isRunning_(false), timing_(0) {
+  ERR.set(&cpu_);
+}
 
 void Gameboy::executeSingleFrame() {
   timing_ += CYCLE_PER_FRAME;
@@ -19,4 +22,5 @@ void Gameboy::executeSingleFrame() {
     video_.runCycles(cycle);
     timing_ -= cycle;
   }
+  ERR.pc() << endl;
 }

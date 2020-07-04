@@ -10,7 +10,8 @@ class Video {
   int timing_;
   uint8_t buf_[144 * 160];
 
-  void renderLine_(uint8_t LCDC);
+  void renderBackgroundLine_(uint8_t LCDC, uint8_t LY);
+  void renderLine_(uint8_t LCDC, uint8_t LY);
   void drawFrame_(uint8_t LY);
  public:
   Video(IO* io, int canvasId);

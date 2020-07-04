@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define N_BIT(x, n) (((x) >> (n)) & 1)
+
 class Memory;
 
 class IO {

@@ -34,8 +34,10 @@ uint8_t Memory::read(uint16_t addr) {
     ERR << "Read UIO Addr " << addr << endl;
     return 0;
   }
-  if (addr < 0xFFFF)
+  if (addr < 0xFFFF) {
+    // if (addr == 0xFF80) return 0;
     return highRam_[addr - 0xFF80];
+  }
   if (addr == 0xFFFF)
     return io_->read(0xFFFF);
   ERR << "Read address out of bound: " << addr << endl;
@@ -69,8 +71,9 @@ uint8_t Memory::write(uint16_t addr, uint8_t datum) {
     // ERR << "Write UIO Addr " << addr << " " << datum << endl;
     return 0;
   }
-  if (addr < 0xFFFF)
+  if (addr < 0xFFFF) {
     return highRam_[addr - 0xFF80] = datum;
+  }
   if (addr == 0xFFFF)
     return io_->write(0xFFFF, datum);
   ERR << "Write address out of bound: " << addr << endl;
