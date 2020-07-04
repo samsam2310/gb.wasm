@@ -2,18 +2,30 @@
 
 #include "log.h"
 
-IO::IO() {
-  reg_ = new uint8_t[0x100];
+#include <cstring>
+
+IO::IO(Memory* mem): mem_(mem) {
+  memset(reg_, 0, sizeof(reg_));
   enableInterrupt();
+  reg_[LCDC] = 0x91;
+  reg_[BGP] = 0xFC;
+  reg_[OBP0] = 0xFF;
+  reg_[OBP1] = 0xFF;
 }
 
-IO::IO(IO&& oth) {
-  reg_ = oth.reg_;
-  oth.reg_ = nullptr;
-}
+IO::~IO() {}
 
-IO::~IO() {
-  delete reg_;
+void IO::disableInterrupt() {
+  ERR << "IO DL" << endl;
+  reg_[IME] = 0;
+}
+void IO::enableInterrupt() {
+  ERR << "IO EL" << endl;
+  reg_[IME] = 0xFF;
+}
+void IO::requestInterrupt(INTERRUPT inter) {
+  ERR << "IO R inter: " << inter << endl;
+  reg_[IF] |= (1 << inter);
 }
 
 uint8_t IO::read(uint16_t addr) {
@@ -55,7 +67,6 @@ uint8_t IO::read(uint16_t addr) {
     case SCX:
     case LY:
     case LYC:
-    case DMA:
     case BGP:
     case OBP0:
     case OBP1:
@@ -65,14 +76,24 @@ uint8_t IO::read(uint16_t addr) {
       return reg_[reg];
 
     default:
-      ERR << "Read undefined IO register: " << addr << "\n";
+      ERR << "Read undefined IO register: " << addr << endl;
       throw 1;
   }
 }
 
 uint8_t IO::write(uint16_t addr, uint8_t datum) {
   uint8_t reg = addr & 0xFF;
+  // ERR << "IO Write " << reg << " " << datum << endl;
   switch (reg) {
+    case DMA:
+      return doDMA_(datum);
+    case STAT:
+      ERR << "STAT write " << datum << endl;
+      return reg_[reg] = (reg_[reg] & 0x3) | (datum & 0xFC);
+    case LCDC:
+      ERR << "LCDC write " << datum << " STAT " << reg_[STAT] << endl;
+      return reg_[reg] = datum;
+
     case P1:
     case SB:
     case SC:
@@ -102,13 +123,11 @@ uint8_t IO::write(uint16_t addr, uint8_t datum) {
     case NR50:
     case NR51:
     case NR52:
-    case LCDC:
-    case STAT:
+    // case LCDC:
     case SCY:
     case SCX:
-    case LY:
-    case LYC:
-    case DMA:
+    // case LY:
+    // case LYC:
     case BGP:
     case OBP0:
     case OBP1:
@@ -118,18 +137,10 @@ uint8_t IO::write(uint16_t addr, uint8_t datum) {
       return reg_[reg] = datum;
 
     default:
-      ERR << "Write undefined IO register: " << addr << ' ' << (uint16_t)datum
-          << "\n";
+      ERR << "Write undefined IO register: " << addr << " " << (uint16_t)datum
+          << endl;
       throw 1;
   }
-}
-
-void IO::disableInterrupt() {
-  reg_[IME] = 0;
-}
-
-void IO::enableInterrupt() {
-  reg_[IME] = 0xFF;
 }
 
 uint16_t IO::acknowledgeInterrupt() {
@@ -141,4 +152,12 @@ uint16_t IO::acknowledgeInterrupt() {
     }
   }
   return 0xFFFF;
+}
+
+uint8_t IO::doDMA_(uint8_t arg) {
+  uint16_t base = (uint16_t)(arg) << 8;
+  for (uint16_t i = 0; i < 0xA0; ++i) {
+    oam[i] = mem_->read(base | i);
+  }
+  return 0;
 }

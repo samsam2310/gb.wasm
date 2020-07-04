@@ -1,4 +1,5 @@
 *.gb
+*.gb.bin
 main
 
 # Logs

@@ -1,11 +1,21 @@
 #pragma once
+#include "memory.h"
+
 #include <stdint.h>
+
+class Memory;
 
 class IO {
  private:
-  uint8_t* reg_;
+  uint8_t reg_[0x100];
+  Memory* mem_;
+
+  uint8_t doDMA_(uint8_t arg);
 
  public:
+  uint8_t oam[0xA0];
+  uint8_t vram[0x2000];
+
   enum REG {
     P1 = 0x00,
     SB = 0x01,
@@ -51,13 +61,23 @@ class IO {
     IME = 0xFE,
     IE = 0xFF
   };
+  enum INTERRUPT {
+    VBLANK = 0,
+    LCDC_STATUS,
+    TIMER_OVERFLOW,
+    SERIAL_TRANSFER,
+    HIGH_TO_LOW_P10_P13,
+  };
 
-  IO();
-  IO(IO&& oth);
+  IO(Memory* mem);
   ~IO();
   uint8_t read(uint16_t addr);
   uint8_t write(uint16_t addr, uint8_t data);
+  uint8_t& reg(REG name) {
+    return reg_[name];
+  }
   void disableInterrupt();
   void enableInterrupt();
+  void requestInterrupt(INTERRUPT inter);
   uint16_t acknowledgeInterrupt();
 };

@@ -39,12 +39,13 @@ class CPU {
     uint16_t pc;
   } reg_;
 
-  Memory mem_;
+  Memory* mem_;
 
-  int execSingleInst_();
+  int executeCBInst_(uint8_t op);
+  int executeSingleInstInner_();
   int stop_();
 
  public:
-  CPU(Memory&& mem);
-  int execute(int cycle);
+  CPU(Memory* mem);
+  int executeSingleInst();
 };
