@@ -10,8 +10,6 @@ class Video {
   IO* io_;
   int canvasId_;
   int timing_;
-  uint8_t bgBuf_[160];
-  uint8_t spBuf_[160];
   uint8_t buf_[144 * 160];
 
   void renderBackgroundLine_(uint8_t LCDC, uint8_t LY);

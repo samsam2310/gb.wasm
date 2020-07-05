@@ -2,6 +2,7 @@
 #include "cpu.h"
 #include "io.h"
 #include "memory.h"
+#include "timer.h"
 #include "video.h"
 
 #include <stdint.h>
@@ -11,6 +12,7 @@ class Gameboy {
   IO io_;
   Memory mem_;
   Video video_;
+  Timer timer_;
   CPU cpu_;
   bool isRunning_;
   int timing_;
@@ -20,5 +22,5 @@ class Gameboy {
   bool run();
   // bool pause();
   // bool stop();
-  void executeSingleFrame();
+  void executeSingleFrame(uint8_t joypad);
 };

@@ -4,8 +4,6 @@
 
 #include <stdint.h>
 
-#define N_BIT(x, n) (((x) >> (n)) & 1)
-
 class Memory;
 class Video;
 
@@ -63,15 +61,16 @@ class IO {
     OBP1,
     WY,
     WX,
+    JOYPAD_DATA = 0xFD,
     IME = 0xFE,
     IE = 0xFF
   };
-  enum INTERRUPT {
-    VBLANK = 0,
-    LCDC_STATUS,
-    TIMER_OVERFLOW,
-    SERIAL_TRANSFER,
-    HIGH_TO_LOW_P10_P13,
+  enum IRQ {
+    IRQ_VBLANK = 0,
+    IRQ_LCDC,
+    IRQ_TIMER,
+    IRQ_SERIAL,
+    IRQ_JOYPAD,
   };
 
   IO(Memory* mem, Video* video);
@@ -81,8 +80,9 @@ class IO {
   uint8_t& reg(REG name) {
     return reg_[name];
   }
+  void setJoypad(uint8_t datum);
   void disableInterrupt();
   void enableInterrupt();
-  void requestInterrupt(INTERRUPT inter);
+  void requestInterrupt(IRQ irq);
   uint16_t acknowledgeInterrupt();
 };

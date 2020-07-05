@@ -4,6 +4,8 @@
 
 #include <cstring>
 
+#define N_BIT(x, n) (((x) >> (n)) & 1)
+
 IO::IO(Memory* mem, Video* video): mem_(mem), video_(video) {
   memset(reg_, 0, sizeof(reg_));
   enableInterrupt();
@@ -12,6 +14,7 @@ IO::IO(Memory* mem, Video* video): mem_(mem), video_(video) {
   reg_[BGP] = 0xFC;
   reg_[OBP0] = 0xFF;
   reg_[OBP1] = 0xFF;
+  reg_[JOYPAD_DATA] = 0xFF;
 }
 
 IO::~IO() {}
@@ -24,9 +27,9 @@ void IO::enableInterrupt() {
   // ERR << "IO EL" << endl;
   reg_[IME] = 0xFF;
 }
-void IO::requestInterrupt(INTERRUPT inter) {
+void IO::requestInterrupt(IRQ irq) {
   // ERR << "IO R inter: " << inter << endl;
-  reg_[IF] |= (1 << inter);
+  reg_[IF] |= (1 << irq);
 }
 
 uint8_t IO::read(uint16_t addr) {
@@ -37,10 +40,10 @@ uint8_t IO::read(uint16_t addr) {
     case P1:
     case SB:
     case SC:
-    // case DIV:
-    // case TIMA:
-    // case TMA:
-    // case TAC:
+    case DIV:
+    case TIMA:
+    case TMA:
+    case TAC:
     case NR10:
     case NR11:
     case NR12:
@@ -85,6 +88,12 @@ uint8_t IO::read(uint16_t addr) {
   }
 }
 
+uint8_t getP1Data(uint8_t p1, uint8_t joypadData) {
+  uint8_t l1 = ((p1 & 0x10) ? 0xF : (joypadData & 0xF));
+  uint8_t l2 = ((p1 & 0x20) ? 0xF : ((joypadData >> 4) & 0xF));
+  return (p1 & 0xF0) | ((l1 & l2) & 0xF);
+}
+
 uint8_t IO::write(uint16_t addr, uint8_t datum) {
   uint8_t reg = addr & 0xFF;
   // ERR << "IO Write " << reg << " " << datum << endl;
@@ -103,12 +112,17 @@ uint8_t IO::write(uint16_t addr, uint8_t datum) {
       }
       return reg_[reg] = datum;
     case P1:
+      return reg_[reg] = getP1Data(datum, reg_[JOYPAD_DATA]);
+    case LY:
+      reg_[LY] = 0;
+      reg_[STAT] = reg_[STAT] & 0xF8;
+      video_->resetTimer();
       return 0;
-      return reg_[reg] = (reg_[reg] & 0xF) | (datum & 0xF0);
+    case DIV:
+      return reg_[reg] = 0;
 
     case SB:
     case SC:
-    case DIV:
     case TIMA:
     case TMA:
     case TAC:
@@ -134,11 +148,9 @@ uint8_t IO::write(uint16_t addr, uint8_t datum) {
     case NR50:
     case NR51:
     case NR52:
-    // case LCDC:
     case SCY:
     case SCX:
-    // case LY:
-    // case LYC:
+    case LYC:
     case BGP:
     case OBP0:
     case OBP1:
@@ -175,4 +187,15 @@ uint8_t IO::doDMA_(uint8_t arg) {
     oam[i] = mem_->read(base | i);
   }
   return 0;
+}
+
+void IO::setJoypad(uint8_t datum) {
+  uint8_t& old = reg_[JOYPAD_DATA];
+  if ((old & datum) != old) {
+    // if High to Low
+    requestInterrupt(IRQ_JOYPAD);
+    // ERR << "JOYPAD ! " << datum << endl;
+  }
+  old = datum;
+  reg_[P1] = getP1Data(reg_[P1], datum);
 }

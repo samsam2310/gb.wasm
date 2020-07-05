@@ -12,8 +12,10 @@ CPU::CPU(Memory* mem) : mem_(mem) {
 }
 
 #define FLAG(Z, N, H, C) ((Z) << 7 | (N) << 6 | (H) << 5 | (C) << 4)
-#define FLAG_Z(f) ((f >> 7) & 1)
-#define FLAG_C(f) ((f >> 4) & 1)
+#define FLAG_Z(f) (((f) >> 7) & 1)
+#define FLAG_N(f) (((f) >> 6) & 1)
+#define FLAG_H(f) (((f) >> 5) & 1)
+#define FLAG_C(f) (((f) >> 4) & 1)
 #define N_BIT(x, n) (((x) >> (n)) & 1)
 
 void add(uint8_t* x, uint8_t* y, uint8_t* f) {
@@ -21,6 +23,23 @@ void add(uint8_t* x, uint8_t* y, uint8_t* f) {
   uint16_t r16 = (uint16_t)*x + (uint16_t)*y;
   *x += *y;
   *f = FLAG(*x == 0, 0, r8 >> 4 != 0, r16 >> 8 != 0);
+}
+
+void adc(uint8_t* x, uint8_t y, uint8_t* f) {
+  uint8_t r8 = (*x & 0xF) + (y & 0xF) + FLAG_C(*f);
+  uint16_t r16 = (uint16_t)*x + (uint16_t)y;
+  *x += y + FLAG_C(*f);
+  *f = FLAG(*x == 0, 0, r8 >> 4 != 0, r16 >> 8 != 0);
+}
+
+void sub(uint8_t* x, uint8_t y, uint8_t* f) {
+  *f = FLAG(*x == y, 1, (*x & 0xF) < (y & 0xF), *x < y);
+  *x -= y;
+}
+
+void sbc(uint8_t* x, uint8_t y, uint8_t* f) {
+  *f = FLAG(*x == y, 1, (*x & 0xF) < (y & 0xF) + FLAG_C(*f), *x < y + FLAG_C(*f));
+  *x -= y + FLAG_C(*f);
 }
 
 void add(uint16_t* x, uint16_t y, uint8_t* f) {
@@ -59,15 +78,44 @@ void dec(uint8_t* x, uint8_t* f) {
   *f = FLAG(*x == 0, 1, (*x & 0xF) != 0xF, (*f >> 4) & 1);
 }
 
-void rrca(uint8_t* x, uint8_t* f) {
-  *x = *x << 7 | *x >> 1;
-  *f = FLAG(*x == 0, 1, 0, *x >> 7);
+void rlc(uint8_t* x, uint8_t* f) {
+  *x = (*x << 1) | (*x >> 7);
+  *f = FLAG(*x == 0, 0, 0, *x & 1);
+}
+
+void rl(uint8_t* x, uint8_t* f) {
+  uint8_t c = (*x >> 7);
+  *x = (*x << 1) | FLAG_C(*f);
+  *f = FLAG(*x == 0, 0, 0, c);
+}
+
+void rrc(uint8_t* x, uint8_t* f) {
+  *f = FLAG(*x == 0, 0, 0, *x & 1);
+  *x = (*x >> 1) | (*x << 7);
+}
+
+void rr(uint8_t* x, uint8_t* f) {
+  uint8_t c = (*x & 1);
+  *x = (*x >> 1) | (FLAG_C(*f) << 7);
+  *f = FLAG(*x == 0, 0, 0, c);
 }
 
 void sla(uint8_t* x, uint8_t* f) {
   uint8_t c = N_BIT(*x, 7);
   *x <<= 1;
-  *f = FLAG(*x == 0, 1, 0, c);
+  *f = FLAG(*x == 0, 0, 0, c);
+}
+
+void sra(uint8_t* x, uint8_t* f) {
+  uint8_t c = (*x & 1);
+  *x = (*x & 0x80) | (*x >> 1);
+  *f = FLAG(*x == 0, 0, 0, c);
+}
+
+void srl(uint8_t* x, uint8_t* f) {
+  uint8_t c = (*x & 1);
+  *x >>= 1;
+  *f = FLAG(*x == 0, 0, 0, c);
 }
 
 void gbSwap(uint8_t* x, uint8_t* f) {
@@ -77,6 +125,37 @@ void gbSwap(uint8_t* x, uint8_t* f) {
 
 void bit(uint8_t x, uint8_t b, uint8_t* f) {
   *f = FLAG(((x >> b) & 1) == 0, 0, 1, FLAG_C(*f));
+}
+
+void daa(uint8_t* x, uint8_t* f) {
+  int t = 0;
+  uint8_t c = 0;
+  uint8_t h = 0;
+  if(FLAG_H(*f) || ((*x & 0xF) > 9)) {
+    ++t;
+  }
+  if(FLAG_C(*f) || (*x > 0x99)) {
+    t += 2;
+    c = 1;
+  }
+  if (FLAG_N(*f) && !FLAG_H(*f));
+  else if (FLAG_N(*f) && FLAG_H(*f)) {
+    h = (((*x & 0x0F)) < 6);
+  } else {
+    h = ((*x & 0x0F) >= 0x0A);
+  }
+  switch(t) {
+    case 1:
+      *x += (FLAG_N(*f)) ? 0xFA : 0x06; // -6:6
+      break;
+    case 2:
+      *x += (FLAG_N(*f)) ? 0xA0 : 0x60; // -0x60:0x60
+      break;
+    case 3:
+      *x += (FLAG_N(*f)) ? 0x9A : 0x66; // -0x66:0x66
+      break;
+  }
+  *f = FLAG(*x == 0, FLAG_N(*f), h, c);
 }
 
 uint16_t signExtend16(uint8_t x) {
@@ -118,6 +197,114 @@ int CPU::executeCBInst_(uint8_t op) {
       gbSwap(&n, &reg_.f);
       mem_->write(reg_.hl, n);
       return 16;
+      // ---- 6.5 ----
+    case 0x07:
+      rlc(&reg_.a, &reg_.f);
+      return 8;
+    case 0x00:
+      rlc(&reg_.b, &reg_.f);
+      return 8;
+    case 0x01:
+      rlc(&reg_.c, &reg_.f);
+      return 8;
+    case 0x02:
+      rlc(&reg_.d, &reg_.f);
+      return 8;
+    case 0x03:
+      rlc(&reg_.e, &reg_.f);
+      return 8;
+    case 0x04:
+      rlc(&reg_.h, &reg_.f);
+      return 8;
+    case 0x05:
+      rlc(&reg_.l, &reg_.f);
+      return 8;
+    case 0x06:
+      n = mem_->read(reg_.hl);
+      rlc(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
+      // ---- 6.6 ----
+    case 0x17:
+      rl(&reg_.a, &reg_.f);
+      return 8;
+    case 0x10:
+      rl(&reg_.b, &reg_.f);
+      return 8;
+    case 0x11:
+      rl(&reg_.c, &reg_.f);
+      return 8;
+    case 0x12:
+      rl(&reg_.d, &reg_.f);
+      return 8;
+    case 0x13:
+      rl(&reg_.e, &reg_.f);
+      return 8;
+    case 0x14:
+      rl(&reg_.h, &reg_.f);
+      return 8;
+    case 0x15:
+      rl(&reg_.l, &reg_.f);
+      return 8;
+    case 0x16:
+      n = mem_->read(reg_.hl);
+      rl(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
+      // ---- 6.7 ----
+    case 0x0F:
+      rrc(&reg_.a, &reg_.f);
+      return 8;
+    case 0x08:
+      rrc(&reg_.b, &reg_.f);
+      return 8;
+    case 0x09:
+      rrc(&reg_.c, &reg_.f);
+      return 8;
+    case 0x0A:
+      rrc(&reg_.d, &reg_.f);
+      return 8;
+    case 0x0B:
+      rrc(&reg_.e, &reg_.f);
+      return 8;
+    case 0x0C:
+      rrc(&reg_.h, &reg_.f);
+      return 8;
+    case 0x0D:
+      rrc(&reg_.l, &reg_.f);
+      return 8;
+    case 0x0E:
+      n = mem_->read(reg_.hl);
+      rrc(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
+      // ---- 6.8 ----
+    case 0x1F:
+      rr(&reg_.a, &reg_.f);
+      return 8;
+    case 0x18:
+      rr(&reg_.b, &reg_.f);
+      return 8;
+    case 0x19:
+      rr(&reg_.c, &reg_.f);
+      return 8;
+    case 0x1A:
+      rr(&reg_.d, &reg_.f);
+      return 8;
+    case 0x1B:
+      rr(&reg_.e, &reg_.f);
+      return 8;
+    case 0x1C:
+      rr(&reg_.h, &reg_.f);
+      return 8;
+    case 0x1D:
+      rr(&reg_.l, &reg_.f);
+      return 8;
+    case 0x1E:
+      n = mem_->read(reg_.hl);
+      rr(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
       // ---- 6.9 ----
     case 0x27:
       sla(&reg_.a, &reg_.f);
@@ -143,6 +330,60 @@ int CPU::executeCBInst_(uint8_t op) {
     case 0x26:
       n = mem_->read(reg_.hl);
       sla(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
+      // ---- 6.10 ----
+    case 0x2F:
+      sra(&reg_.a, &reg_.f);
+      return 8;
+    case 0x28:
+      sra(&reg_.b, &reg_.f);
+      return 8;
+    case 0x29:
+      sra(&reg_.c, &reg_.f);
+      return 8;
+    case 0x2A:
+      sra(&reg_.d, &reg_.f);
+      return 8;
+    case 0x2B:
+      sra(&reg_.e, &reg_.f);
+      return 8;
+    case 0x2C:
+      sra(&reg_.h, &reg_.f);
+      return 8;
+    case 0x2D:
+      sra(&reg_.l, &reg_.f);
+      return 8;
+    case 0x2E:
+      n = mem_->read(reg_.hl);
+      sra(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
+      // ---- 6.11 ----
+    case 0x3F:
+      srl(&reg_.a, &reg_.f);
+      return 8;
+    case 0x38:
+      srl(&reg_.b, &reg_.f);
+      return 8;
+    case 0x39:
+      srl(&reg_.c, &reg_.f);
+      return 8;
+    case 0x3A:
+      srl(&reg_.d, &reg_.f);
+      return 8;
+    case 0x3B:
+      srl(&reg_.e, &reg_.f);
+      return 8;
+    case 0x3C:
+      srl(&reg_.h, &reg_.f);
+      return 8;
+    case 0x3D:
+      srl(&reg_.l, &reg_.f);
+      return 8;
+    case 0x3E:
+      n = mem_->read(reg_.hl);
+      srl(&n, &reg_.f);
       mem_->write(reg_.hl, n);
       return 16;
       // BIT
@@ -773,6 +1014,96 @@ int CPU::executeSingleInstInner_() {
       READ_N;
       add(&reg_.a, &n, &reg_.f);
       return 8;
+      // ---- 6.2 ----
+    case 0x8F:
+      adc(&reg_.a, reg_.a, &reg_.f);
+      return 4;
+    case 0x88:
+      adc(&reg_.a, reg_.b, &reg_.f);
+      return 4;
+    case 0x89:
+      adc(&reg_.a, reg_.c, &reg_.f);
+      return 4;
+    case 0x8A:
+      adc(&reg_.a, reg_.d, &reg_.f);
+      return 4;
+    case 0x8B:
+      adc(&reg_.a, reg_.e, &reg_.f);
+      return 4;
+    case 0x8C:
+      adc(&reg_.a, reg_.h, &reg_.f);
+      return 4;
+    case 0x8D:
+      adc(&reg_.a, reg_.l, &reg_.f);
+      return 4;
+    case 0x8E:
+      n = mem_->read(reg_.hl);
+      adc(&reg_.a, n, &reg_.f);
+      return 8;
+    case 0xCE:
+      READ_N;
+      adc(&reg_.a, n, &reg_.f);
+      return 8;
+      // ---- 3.3 ----
+    case 0x97:
+      sub(&reg_.a, reg_.a, &reg_.f);
+      return 4;
+    case 0x90:
+      sub(&reg_.a, reg_.b, &reg_.f);
+      return 4;
+    case 0x91:
+      sub(&reg_.a, reg_.c, &reg_.f);
+      return 4;
+    case 0x92:
+      sub(&reg_.a, reg_.d, &reg_.f);
+      return 4;
+    case 0x93:
+      sub(&reg_.a, reg_.e, &reg_.f);
+      return 4;
+    case 0x94:
+      sub(&reg_.a, reg_.h, &reg_.f);
+      return 4;
+    case 0x95:
+      sub(&reg_.a, reg_.l, &reg_.f);
+      return 4;
+    case 0x96:
+      n = mem_->read(reg_.hl);
+      sub(&reg_.a, n, &reg_.f);
+      return 8;
+    case 0xD6:
+      READ_N;
+      sub(&reg_.a, n, &reg_.f);
+      return 8;
+      // ---- 3.4 ----
+    case 0x9F:
+      sbc(&reg_.a, reg_.a, &reg_.f);
+      return 4;
+    case 0x98:
+      sbc(&reg_.a, reg_.b, &reg_.f);
+      return 4;
+    case 0x99:
+      sbc(&reg_.a, reg_.c, &reg_.f);
+      return 4;
+    case 0x9A:
+      sbc(&reg_.a, reg_.d, &reg_.f);
+      return 4;
+    case 0x9B:
+      sbc(&reg_.a, reg_.e, &reg_.f);
+      return 4;
+    case 0x9C:
+      sbc(&reg_.a, reg_.h, &reg_.f);
+      return 4;
+    case 0x9D:
+      sbc(&reg_.a, reg_.l, &reg_.f);
+      return 4;
+    case 0x9E:
+      n = mem_->read(reg_.hl);
+      sbc(&reg_.a, n, &reg_.f);
+      return 8;
+    case 0xDE:
+      READ_N;
+      sbc(&reg_.a, n, &reg_.f);
+      return 8;
       // ---- 3.5 ----
     case 0xA7:
       doAnd(&reg_.a, &reg_.a, &reg_.f);
@@ -985,10 +1316,22 @@ int CPU::executeSingleInstInner_() {
     case 0x3B:
       -- reg_.sp;
       return 8;
+      // ---- 5.2 ----
+    case 0x27:
+      daa(&reg_.a, &reg_.f);
+      return 4;
       // ---- 5.3 ----
     case 0x2F:
       reg_.a = ~reg_.a;
       reg_.f = FLAG(FLAG_Z(reg_.f),1,1,FLAG_C(reg_.f));
+      return 4;
+      // ---- 5.4 ----
+    case 0x3F:
+      reg_.f = FLAG(FLAG_Z(reg_.f), 0, 0, !FLAG_C(reg_.f));
+      return 4;
+      // ---- 5.5 ----
+    case 0x37:
+      reg_.f = FLAG(FLAG_Z(reg_.f), 0, 0, 1);
       return 4;
       // ---- 5.6 ----
     case 0x00:  // NOP
@@ -1010,9 +1353,21 @@ int CPU::executeSingleInstInner_() {
     case 0xFB:
       mem_->io().enableInterrupt();
       return 4;
+      // ---- 6.1 ----
+    case 0x07:
+      rlc(&reg_.a, &reg_.f);
+      return 4;
+      // ---- 6.1 ----
+    case 0x17:
+      rl(&reg_.a, &reg_.f);
+      return 4;
       // ---- 6.3 ----
     case 0x0F:
-      rrca(&reg_.a, &reg_.f);
+      rrc(&reg_.a, &reg_.f);
+      return 4;
+      // ---- 6.4 ----
+    case 0x1F:
+      rr(&reg_.a, &reg_.f);
       return 4;
       // ---- CB ----
     case 0xCB:
@@ -1094,7 +1449,6 @@ int CPU::executeSingleInstInner_() {
     case 0xEF:
     case 0xF7:
     case 0xFF:
-      ERR << "RST " << op << " " << (op - 0xC7) << endl;
       reg_.sp -= 2;
       mem_->write16(reg_.sp, reg_.pc);
       reg_.pc = op - 0xC7;
@@ -1138,7 +1492,7 @@ int CPU::executeSingleInstInner_() {
       reg_.pc = mem_->read16(reg_.sp);
       reg_.sp += 2;
       mem_->io().enableInterrupt();
-      ERR << "RETI" << endl;
+      // ERR << "RETI" << endl;
       return 8;
 
     default:
@@ -1150,7 +1504,7 @@ int CPU::executeSingleInstInner_() {
 int CPU::executeSingleInst() {
   uint16_t interruptAddr = mem_->io().acknowledgeInterrupt();
   if (interruptAddr != 0xFFFF) {
-    ERR << "Interrupt ! " << interruptAddr << endl;
+    // ERR << "Interrupt ! " << interruptAddr << endl;
     mem_->io().disableInterrupt();
     reg_.sp -= 2;
     mem_->write16(reg_.sp, reg_.pc);
