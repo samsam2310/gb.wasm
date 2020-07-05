@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-IO::IO(Memory* mem): mem_(mem) {
+IO::IO(Memory* mem, Video* video): mem_(mem), video_(video) {
   memset(reg_, 0, sizeof(reg_));
   enableInterrupt();
   reg_[P1] = 0xF;
@@ -37,10 +37,10 @@ uint8_t IO::read(uint16_t addr) {
     case P1:
     case SB:
     case SC:
-    case DIV:
-    case TIMA:
-    case TMA:
-    case TAC:
+    // case DIV:
+    // case TIMA:
+    // case TMA:
+    // case TAC:
     case NR10:
     case NR11:
     case NR12:
@@ -77,6 +77,9 @@ uint8_t IO::read(uint16_t addr) {
       return reg_[reg];
 
     default:
+      // Wave Pattern RAM
+      if (reg >= 0x30 && reg <= 0x3F)
+        return reg_[reg];
       ERR << "Read undefined IO register: " << addr << endl;
       throw 1;
   }
@@ -84,7 +87,7 @@ uint8_t IO::read(uint16_t addr) {
 
 uint8_t IO::write(uint16_t addr, uint8_t datum) {
   uint8_t reg = addr & 0xFF;
-  ERR << "IO Write " << reg << " " << datum << endl;
+  // ERR << "IO Write " << reg << " " << datum << endl;
   switch (reg) {
     case DMA:
       return doDMA_(datum);
@@ -93,8 +96,14 @@ uint8_t IO::write(uint16_t addr, uint8_t datum) {
       return reg_[reg] = (reg_[reg] & 0x7) | (datum & 0xF8);
     case LCDC:
       ERR.pc() << "LCDC write " << datum << " STAT " << reg_[STAT] << endl;
+      if ((datum & 0x80) != 0x80) {
+        reg_[LY] = 0;
+        reg_[STAT] = reg_[STAT] & 0xF8;
+        video_->resetTimer();
+      }
       return reg_[reg] = datum;
     case P1:
+      return 0;
       return reg_[reg] = (reg_[reg] & 0xF) | (datum & 0xF0);
 
     case SB:
@@ -139,6 +148,10 @@ uint8_t IO::write(uint16_t addr, uint8_t datum) {
       return reg_[reg] = datum;
 
     default:
+      // Wave Pattern RAM
+      if (reg >= 0x30 && reg <= 0x3F)
+        return reg_[reg] = datum;
+
       ERR << "Write undefined IO register: " << addr << " " << (uint16_t)datum
           << endl;
       throw 1;

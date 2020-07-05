@@ -14,6 +14,7 @@ CPU::CPU(Memory* mem) : mem_(mem) {
 #define FLAG(Z, N, H, C) ((Z) << 7 | (N) << 6 | (H) << 5 | (C) << 4)
 #define FLAG_Z(f) ((f >> 7) & 1)
 #define FLAG_C(f) ((f >> 4) & 1)
+#define N_BIT(x, n) (((x) >> (n)) & 1)
 
 void add(uint8_t* x, uint8_t* y, uint8_t* f) {
   uint8_t r8 = (*x & 0xF) + (*y & 0xF);
@@ -63,9 +64,19 @@ void rrca(uint8_t* x, uint8_t* f) {
   *f = FLAG(*x == 0, 1, 0, *x >> 7);
 }
 
+void sla(uint8_t* x, uint8_t* f) {
+  uint8_t c = N_BIT(*x, 7);
+  *x <<= 1;
+  *f = FLAG(*x == 0, 1, 0, c);
+}
+
 void gbSwap(uint8_t* x, uint8_t* f) {
   *x = ((*x >> 4) & 0xF) | ((*x << 4) & 0xF0);
   *f = FLAG(*x == 0, 0, 0, 0);
+}
+
+void bit(uint8_t x, uint8_t b, uint8_t* f) {
+  *f = FLAG(((x >> b) & 1) == 0, 0, 1, FLAG_C(*f));
 }
 
 uint16_t signExtend16(uint8_t x) {
@@ -107,6 +118,280 @@ int CPU::executeCBInst_(uint8_t op) {
       gbSwap(&n, &reg_.f);
       mem_->write(reg_.hl, n);
       return 16;
+      // ---- 6.9 ----
+    case 0x27:
+      sla(&reg_.a, &reg_.f);
+      return 8;
+    case 0x20:
+      sla(&reg_.b, &reg_.f);
+      return 8;
+    case 0x21:
+      sla(&reg_.c, &reg_.f);
+      return 8;
+    case 0x22:
+      sla(&reg_.d, &reg_.f);
+      return 8;
+    case 0x23:
+      sla(&reg_.e, &reg_.f);
+      return 8;
+    case 0x24:
+      sla(&reg_.h, &reg_.f);
+      return 8;
+    case 0x25:
+      sla(&reg_.l, &reg_.f);
+      return 8;
+    case 0x26:
+      n = mem_->read(reg_.hl);
+      sla(&n, &reg_.f);
+      mem_->write(reg_.hl, n);
+      return 16;
+      // BIT
+    case 0x40:
+    case 0x48:
+    case 0x50:
+    case 0x58:
+    case 0x60:
+    case 0x68:
+    case 0x70:
+    case 0x78:
+      bit(reg_.b, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+    case 0x41:
+    case 0x49:
+    case 0x51:
+    case 0x59:
+    case 0x61:
+    case 0x69:
+    case 0x71:
+    case 0x79:
+      bit(reg_.c, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+    case 0x42:
+    case 0x4A:
+    case 0x52:
+    case 0x5A:
+    case 0x62:
+    case 0x6A:
+    case 0x72:
+    case 0x7A:
+      bit(reg_.d, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+    case 0x43:
+    case 0x4B:
+    case 0x53:
+    case 0x5B:
+    case 0x63:
+    case 0x6B:
+    case 0x73:
+    case 0x7B:
+      bit(reg_.e, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+    case 0x44:
+    case 0x4C:
+    case 0x54:
+    case 0x5C:
+    case 0x64:
+    case 0x6C:
+    case 0x74:
+    case 0x7C:
+      bit(reg_.h, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+    case 0x45:
+    case 0x4D:
+    case 0x55:
+    case 0x5D:
+    case 0x65:
+    case 0x6D:
+    case 0x75:
+    case 0x7D:
+      bit(reg_.l, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+    case 0x46:
+    case 0x4E:
+    case 0x56:
+    case 0x5E:
+    case 0x66:
+    case 0x6E:
+    case 0x76:
+    case 0x7E:
+      bit(mem_->read(reg_.hl), (op >> 3) & 0x3, &reg_.f);
+      return 12;
+    case 0x47:
+    case 0x4F:
+    case 0x57:
+    case 0x5F:
+    case 0x67:
+    case 0x6F:
+    case 0x77:
+    case 0x7F:
+      bit(reg_.a, (op >> 3) & 0x3, &reg_.f);
+      return 8;
+      // RESET
+    case 0x80:
+    case 0x88:
+    case 0x90:
+    case 0x98:
+    case 0xA0:
+    case 0xA8:
+    case 0xB0:
+    case 0xB8:
+      reg_.b &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0x81:
+    case 0x89:
+    case 0x91:
+    case 0x99:
+    case 0xA1:
+    case 0xA9:
+    case 0xB1:
+    case 0xB9:
+      reg_.c &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0x82:
+    case 0x8A:
+    case 0x92:
+    case 0x9A:
+    case 0xA2:
+    case 0xAA:
+    case 0xB2:
+    case 0xBA:
+      reg_.d &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0x83:
+    case 0x8B:
+    case 0x93:
+    case 0x9B:
+    case 0xA3:
+    case 0xAB:
+    case 0xB3:
+    case 0xBB:
+      reg_.e &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0x84:
+    case 0x8C:
+    case 0x94:
+    case 0x9C:
+    case 0xA4:
+    case 0xAC:
+    case 0xB4:
+    case 0xBC:
+      reg_.h &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0x85:
+    case 0x8D:
+    case 0x95:
+    case 0x9D:
+    case 0xA5:
+    case 0xAD:
+    case 0xB5:
+    case 0xBD:
+      reg_.h &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0x86:
+    case 0x8E:
+    case 0x96:
+    case 0x9E:
+    case 0xA6:
+    case 0xAE:
+    case 0xB6:
+    case 0xBE:
+      n = mem_->read(reg_.hl);
+      n &= ~(1 << ((op >> 3) & 0x3));
+      mem_->write(reg_.hl, n);
+      return 8;
+    case 0x87:
+    case 0x8F:
+    case 0x97:
+    case 0x9F:
+    case 0xA7:
+    case 0xAF:
+    case 0xB7:
+    case 0xBF:
+      reg_.a &= ~(1 << ((op >> 3) & 0x3));
+      return 8;
+      // SET
+    case 0xC0:
+    case 0xC8:
+    case 0xD0:
+    case 0xD8:
+    case 0xE0:
+    case 0xE8:
+    case 0xF0:
+    case 0xF8:
+      reg_.b |= (1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0xC1:
+    case 0xC9:
+    case 0xD1:
+    case 0xD9:
+    case 0xE1:
+    case 0xE9:
+    case 0xF1:
+    case 0xF9:
+      reg_.c |= (1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0xC2:
+    case 0xCA:
+    case 0xD2:
+    case 0xDA:
+    case 0xE2:
+    case 0xEA:
+    case 0xF2:
+    case 0xFA:
+      reg_.d |= (1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0xC3:
+    case 0xCB:
+    case 0xD3:
+    case 0xDB:
+    case 0xE3:
+    case 0xEB:
+    case 0xF3:
+    case 0xFB:
+      reg_.e |= (1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0xC4:
+    case 0xCC:
+    case 0xD4:
+    case 0xDC:
+    case 0xE4:
+    case 0xEC:
+    case 0xF4:
+    case 0xFC:
+      reg_.h |= (1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0xC5:
+    case 0xCD:
+    case 0xD5:
+    case 0xDD:
+    case 0xE5:
+    case 0xED:
+    case 0xF5:
+    case 0xFD:
+      reg_.l |= (1 << ((op >> 3) & 0x3));
+      return 8;
+    case 0xC6:
+    case 0xCE:
+    case 0xD6:
+    case 0xDE:
+    case 0xE6:
+    case 0xEE:
+    case 0xF6:
+    case 0xFE:
+      n = mem_->read(reg_.hl);
+      n |= (1 << ((op >> 3) & 0x3));
+      mem_->write(reg_.hl, n);
+      return 8;
+    case 0xC7:
+    case 0xCF:
+    case 0xD7:
+    case 0xDF:
+    case 0xE7:
+    case 0xEF:
+    case 0xF7:
+    case 0xFF:
+      reg_.a |= (1 << ((op >> 3) & 0x3));
+      return 8;
 
     default:
       ERR << "Uknown CB opcode: " << op << endl;
@@ -369,17 +654,29 @@ int CPU::executeSingleInstInner_() {
       READ_NN;
       mem_->write(nn, reg_.a);
       return 16;
+      // ---- 1.5 ----
+    case 0xF2:
+      reg_.a = mem_->read(0xFF00 | reg_.c);
+      return 8;
       // ---- 1.6 ----
     case 0xE2:
       mem_->write(0xFF00 | reg_.c, reg_.a);
       return 8;
-      // ---- 1.12 ----
+      // ---- 1.9 ---- (1.7 1.8)
+    case 0x3A:
+      reg_.a = mem_->read(reg_.hl--);
+      return 8;
+      // ---- 1.12 ---- (1.10 1.11)
     case 0x32:
       mem_->write(reg_.hl--, reg_.a);
       return 8;
-      // ---- 1.15 ----
+      // ---- 1.15 ---- (1.13 1.14)
     case 0x2A:
       reg_.a = mem_->read(reg_.hl++);
+      return 8;
+      // ---- 1.18 ---- (1.16 1.17)
+    case 0x22:
+      mem_->write(reg_.hl++, reg_.a);
       return 8;
       // ---- 1.19 ----
     case 0xE0:
@@ -408,6 +705,10 @@ int CPU::executeSingleInstInner_() {
       READ_NN;
       reg_.sp = nn;
       return 12;
+      // ---- 2.2 ----
+    case 0xF9:
+      reg_.sp = reg_.hl;
+      return 8;
       // ---- 2.6 ----
     case 0xF5:
       reg_.sp -= 2;
@@ -748,7 +1049,8 @@ int CPU::executeSingleInstInner_() {
       return 12;
       // ---- 8.3 ----
     case 0xE9:
-      reg_.pc = mem_->read(reg_.hl);
+      // reg_.pc = mem_->read(reg_.hl); ?!?!
+      reg_.pc = reg_.hl;
       return 4;
       // ---- 8.4 ----
     case 0x18:
@@ -758,20 +1060,24 @@ int CPU::executeSingleInstInner_() {
       // ---- 8.5 ----
     case 0x20:
       READ_N;
-      reg_.pc += (!FLAG_Z(reg_.f)) * signExtend16(n);
-      return 8;
+      nn = (!FLAG_Z(reg_.f));
+      reg_.pc += nn * signExtend16(n);
+      return 8 + nn * 4;
     case 0x28:
       READ_N;
-      reg_.pc += (FLAG_Z(reg_.f)) * signExtend16(n);
-      return 8;
+      nn = (FLAG_Z(reg_.f));
+      reg_.pc += nn * signExtend16(n);
+      return 8 + nn * 4;
     case 0x30:
       READ_N;
-      reg_.pc += (!FLAG_C(reg_.f)) * signExtend16(n);
-      return 8;
+      nn = (!FLAG_C(reg_.f));
+      reg_.pc += nn * signExtend16(n);
+      return 8 + nn * 4;
     case 0x38:
       READ_N;
-      reg_.pc += (FLAG_C(reg_.f)) * signExtend16(n);
-      return 8;
+      nn = (FLAG_C(reg_.f));
+      reg_.pc += nn * signExtend16(n);
+      return 8 + nn * 4;
       // ---- 9.1 ----
     case 0xCD:
       READ_NN;
@@ -788,6 +1094,7 @@ int CPU::executeSingleInstInner_() {
     case 0xEF:
     case 0xF7:
     case 0xFF:
+      ERR << "RST " << op << " " << (op - 0xC7) << endl;
       reg_.sp -= 2;
       mem_->write16(reg_.sp, reg_.pc);
       reg_.pc = op - 0xC7;

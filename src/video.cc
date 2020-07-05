@@ -16,7 +16,7 @@ Video::Video(IO* io, int canvasId)
 const uint8_t COLOR[] = { 240, 180, 100, 10 };
 
 void Video::renderBackgroundLine_(uint8_t LCDC, uint8_t LY) {
-  ERR << "Video !! BGL " << endl;
+  // ERR << "Video !! BGL " << endl;
   uint16_t mapBase = (((LCDC & 0x8) == 0x8) ? 0x1C00 : 0x1800);
   uint16_t dataBase = (((LCDC & 0x10) == 0x10) ? 0x0 : 0x1000);
   uint8_t SCY = io_->reg(IO::SCY);
@@ -45,9 +45,18 @@ void Video::renderBackgroundLine_(uint8_t LCDC, uint8_t LY) {
   }
 }
 
+void Video::renderSpriteLine_(uint8_t LCDC, uint8_t LY) {
+  // ERR << "Sprite NO IMPL" << endl;
+  // throw 1;
+}
+
 void Video::renderLine_(uint8_t LCDC, uint8_t LY) {
   if ((LCDC & 0x1) == 0x1) {
     renderBackgroundLine_(LCDC, LY);
+  }
+  // TODO Window Line
+  if ((LCDC & 0x2) == 0x2) {
+    renderSpriteLine_(LCDC, LY);
   }
   // ERR << "Video !! LCDC " << io_->reg(IO::LCDC) << endl;
   // for (uint16_t i = 0; i < 160; ++i) {
@@ -65,11 +74,14 @@ void Video::drawFrame_(uint8_t LCDC) {
 }
 
 void Video::runCycles(int cycles) {
+  uint8_t LCDC = io_->reg(IO::LCDC);
+  if ((LCDC & 0x80) != 0x80)
+    return;
+
   timing_ -= cycles;
   if (timing_ > 0)
     return;
 
-  uint8_t LCDC = io_->reg(IO::LCDC);
   uint8_t& STAT = io_->reg(IO::STAT);
   uint8_t& LY = io_->reg(IO::LY);
   uint8_t LYC = io_->reg(IO::LYC);

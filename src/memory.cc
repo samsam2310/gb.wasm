@@ -35,6 +35,7 @@ uint8_t Memory::read(uint16_t addr) {
     return 0;
   }
   if (addr < 0xFFFF) {
+    // if (addr == 0xFF85) return 1;
     // if (addr == 0xFF80) return 0;
     return highRam_[addr - 0xFF80];
   }

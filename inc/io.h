@@ -1,16 +1,19 @@
 #pragma once
 #include "memory.h"
+#include "video.h"
 
 #include <stdint.h>
 
 #define N_BIT(x, n) (((x) >> (n)) & 1)
 
 class Memory;
+class Video;
 
 class IO {
  private:
   uint8_t reg_[0x100];
   Memory* mem_;
+  Video* video_;
 
   uint8_t doDMA_(uint8_t arg);
 
@@ -71,7 +74,7 @@ class IO {
     HIGH_TO_LOW_P10_P13,
   };
 
-  IO(Memory* mem);
+  IO(Memory* mem, Video* video);
   ~IO();
   uint8_t read(uint16_t addr);
   uint8_t write(uint16_t addr, uint8_t data);
