@@ -20,7 +20,7 @@ EXPORT void executeSingleFrame(Gameboy* gb, uint8_t joypad) {
 }
 
 EXPORT void dump() {
-  ERR.mem(0xFF80).mem(0xFF81) << endl;
+  ERR.mem(0xFF80).mem(0xFF81).mem(0xFFE1) << endl;
   // ERR.mem(0xFF00) << endl;
   // ERR << "oam:" << endl;
   // for (uint16_t i = 0; i < 0xA0; i += 4) {
